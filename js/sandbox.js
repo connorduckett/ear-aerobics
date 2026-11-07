@@ -335,7 +335,7 @@ EA.sandbox = (() => {
           <div class="card plugin" id="sbPlugin"></div>
           <aside class="card learn" id="sbLearn"></aside>
         </div>
-        <input type="file" id="sbFile" accept="audio/*" hidden>
+        <input type="file" id="sbFile" accept="audio/*,.mp3,.wav,.wave,.aif,.aiff,.aifc,.m4a,.mp4,.aac,.flac,.ogg,.oga,.opus,.webm,.caf" hidden>
       </section>`;
     const sb = el.querySelector('#sb');
     sb.addEventListener('click', onClick);
@@ -514,7 +514,7 @@ EA.sandbox = (() => {
   }
 
   function setSource(id) {
-    if (id === 'user' && !sources.hasUser()) { root.querySelector('#sbFile').click(); return; }
+    if (id === 'user' && !sources.hasUser()) { const fi = root.querySelector('#sbFile'); fi.value = ''; fi.click(); return; }
     sourceId = id;
     renderTransport();
     if (playing) startSource().then(renderTransport);

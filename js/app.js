@@ -40,6 +40,66 @@
   let lastResults = null;
   let token = 0;
 
+  // ---------------------------------------------------------------- your-audio file loading
+  // One persistent file input shared by the drill setup and the workout breaks. The accept list
+  // names extensions explicitly: some Mac browsers grey out MP3/WAV files under a bare "audio/*".
+  const AUDIO_ACCEPT = 'audio/*,.mp3,.wav,.wave,.aif,.aiff,.aifc,.m4a,.mp4,.aac,.flac,.ogg,.oga,.opus,.webm,.caf';
+  const fileInput = Object.assign(document.createElement('input'), { type: 'file', accept: AUDIO_ACCEPT, hidden: true });
+  document.body.appendChild(fileInput);
+  let fileLoading = false;
+
+  // where the chosen sound source lives right now: the drill setup, or the upcoming workout drill
+  function sourceTarget() {
+    if (view === 'setup' && setup) return setup;
+    if (view === 'session' && session && session.phase === 'intro') return session.blocks[session.block];
+    return null;
+  }
+  function rerender() {
+    if (view === 'setup' && setup) renderSetup(setup.exId);
+    else if (view === 'session' && session) renderSession();
+  }
+  function pickFile() {
+    fileInput.value = '';
+    fileInput.click();
+  }
+  async function loadFile(f) {
+    if (!f) return;
+    fileLoading = true;
+    rerender();
+    try {
+      await sources.setUserFile(f);
+      const t = sourceTarget();
+      if (t) t.source = 'user';
+    } catch (e) {
+      console.error(e);
+      alert(`Sorry, “${f.name}” could not be decoded. Try a WAV, MP3, AIFF, M4A or FLAC file.`);
+    }
+    fileLoading = false;
+    rerender();
+  }
+  fileInput.addEventListener('change', () => loadFile(fileInput.files[0]));
+  // drag a file anywhere onto the page while a sound source picker is showing
+  window.addEventListener('dragover', (e) => { if (sourceTarget()) e.preventDefault(); });
+  window.addEventListener('drop', (e) => {
+    if (!sourceTarget()) return;
+    e.preventDefault();
+    const f = [...(e.dataTransfer.files || [])][0];
+    if (f) loadFile(f);
+  });
+
+  function sourcePickerHTML(sel) {
+    let hint = '';
+    if (fileLoading) hint = '<p class="hint file-hint"><span class="spinner sm"></span>Loading your audio…</p>';
+    else if (sel === 'user') {
+      hint = `<p class="hint file-hint">${sources.userName
+        ? `Loaded: <strong>${esc(sources.userName)}</strong> · <a href="#" data-action="pick-file">change</a>`
+        : '<a href="#" data-action="pick-file">Choose an audio file…</a>'}<br>MP3, WAV, AIFF, M4A or FLAC. You can also drag a file onto this page. A 12-second excerpt from about 30% into the song is used.</p>`;
+    }
+    return `<div class="seg wrap">
+        ${sources.list.map((s) => `<button class="${sel === s.id ? 'sel' : ''}" data-action="set-source" data-id="${s.id}">${s.name}</button>`).join('')}
+      </div>${hint}`;
+  }
+
   // ---------------------------------------------------------------- helpers
   function rng(seedStr) {
     let h = 1779033703 ^ seedStr.length;
@@ -127,7 +187,7 @@
         <div class="card workout">
           <div class="eyebrow">Daily workout · ${esc(dateLabel)}</div>
           <h1>${done ? 'Workout done. <span class="hl">Nice ears.</span>' : 'Warm up your <span class="hl">ears.</span>'}</h1>
-          <p class="muted">Four quick drills, one from each muscle group. Five questions each, about five minutes.</p>
+          <p class="muted">Four quick drills, one from each muscle group. Five questions each, about five minutes. You choose the sound before each drill and see your score after it.</p>
           <ul class="wo-list">
             ${wo.map((it) => {
               const ex = exercises.byId[it.exId];
@@ -214,11 +274,7 @@
 
             ${ex.noSource ? '' : `
               <h3>Sound source</h3>
-              <div class="seg wrap">
-                ${sources.list.map((s) => `<button class="${setup.source === s.id ? 'sel' : ''}" data-action="set-source" data-id="${s.id}">${s.name}</button>`).join('')}
-              </div>
-              <input type="file" id="userfile" accept="audio/*" hidden>
-              ${setup.source === 'user' ? `<p class="hint file-hint">${sources.userName ? `Loaded: <strong>${esc(sources.userName)}</strong> · <a href="#" data-action="pick-file">change</a>` : '<a href="#" data-action="pick-file">Choose an audio file…</a>'}<br>A 12-second excerpt from about 30% into the song is used.</p>` : ''}
+              ${sourcePickerHTML(setup.source)}
             `}
 
             <h3>Questions</h3>
@@ -243,27 +299,35 @@
           </div>
         </div>
       </section>`;
-
-    const input = document.getElementById('userfile');
-    if (input) input.addEventListener('change', async () => {
-      const f = input.files[0];
-      if (!f) return;
-      try {
-        await sources.setUserFile(f);
-        setup.source = 'user';
-      } catch (e) {
-        alert('Sorry, that file could not be decoded. Try a WAV, MP3, AAC or FLAC file.');
-      }
-      renderSetup(id);
-    });
   }
 
   // ---------------------------------------------------------------- session
-  function startSession({ kind, title, items, source }) {
+  function startSession({ kind, title, items, source, blocks }) {
     audio.ensure();
-    session = { kind, title, items, source, idx: 0, results: [], xp: 0, cur: null, lastAnswer: null };
+    session = { kind, title, items, source, blocks, block: 0, phase: blocks ? 'intro' : 'q', idx: 0, results: [], xp: 0, cur: null, lastAnswer: null };
     if (location.hash === '#/session') route();
     else location.hash = '#/session';
+    if (!blocks) prepareQuestion();
+  }
+
+  // score summary for one drill of the daily workout
+  function blockScore(b) {
+    const rs = session.results.filter((r) => r.block === b);
+    const pts = rs.reduce((s, r) => s + r.grade, 0);
+    return {
+      n: rs.length,
+      p: pct(pts, rs.length),
+      good: rs.filter((r) => gradeClass(r.grade) === 'good').length,
+      close: rs.filter((r) => gradeClass(r.grade) === 'close').length,
+      xp: rs.reduce((s, r) => s + r.xp, 0),
+    };
+  }
+
+  function startBlock() {
+    if (!session || session.phase !== 'intro' || fileLoading) return;
+    const bl = session.blocks[session.block];
+    if (bl.source === 'user' && !sources.hasUser()) { pickFile(); return; }
+    session.phase = 'q';
     prepareQuestion();
   }
 
@@ -282,7 +346,8 @@
     renderSession();
 
     try {
-      const srcId = ex.noSource ? null : (session.source || ex.defaultSource || 'mix');
+      const blk = session.blocks && session.blocks[item.block];
+      const srcId = ex.noSource ? null : ((blk ? blk.source : session.source) || ex.defaultSource || 'mix');
       const raw = srcId ? await sources.get(srcId) : null;
       const src = raw && ex.prep ? ex.prep(raw) : raw;
       const bufs = await exercises.build(ex, src, q);
@@ -309,7 +374,7 @@
     cur.grade = exercises.grade(ex, q, v);
     const xp = Math.round(10 * XP_MULT[item.level] * cur.grade);
     session.xp += xp;
-    session.results.push({ exId: ex.id, level: item.level, answer: q.answer, choice: v, grade: cur.grade, xp, ex });
+    session.results.push({ exId: ex.id, level: item.level, block: item.block, answer: q.answer, choice: v, grade: cur.grade, xp, ex });
     audio.sfx(cur.grade >= 0.5 ? 'good' : 'bad');
 
     const L = (x) => ex.longLabel(x, q);
@@ -338,7 +403,17 @@
     if (!session || !session.cur || !session.cur.answered) return;
     session.idx++;
     if (session.idx >= session.items.length) finish();
-    else prepareQuestion();
+    else if (session.blocks && session.items[session.idx].block !== session.items[session.idx - 1].block) {
+      // workout: pause between drills to show the score and choose the next sound source
+      token++;
+      audio.clear();
+      session.cur = null;
+      session.lastAnswer = null;
+      session.block = session.items[session.idx].block;
+      session.phase = 'intro';
+      renderSession();
+      window.scrollTo(0, 0);
+    } else prepareQuestion();
   }
 
   function finish() {
@@ -352,8 +427,10 @@
   function feedbackHTML(cur) {
     const { ex, q, grade, choice } = cur;
     const right = ex.longLabel(q.answer, q);
-    const last = session.idx === session.items.length - 1;
-    const nextBtn = `<button class="btn primary" data-action="next">${last ? 'See results' : 'Next'} <kbd>↵</kbd></button>`;
+    const last = session.idx >= session.items.length - 1;
+    const following = session.items[session.idx + 1];
+    const blockEnd = !last && session.blocks && following && following.block !== cur.item.block;
+    const nextBtn = `<button class="btn primary" data-action="next">${last ? 'See results' : blockEnd ? 'See drill score' : 'Next'} <kbd>↵</kbd></button>`;
     let cls, title, body;
     if (ex.continuous) {
       const ax = ex.axis;
@@ -516,17 +593,71 @@
     return `<div class="answers grid ${dense} ${ex.layout === 'scale' ? 'scale' : ''}">${q.options.map(btn).join('')}</div>${unit}`;
   }
 
+  function segsHTML() {
+    return session.items.map((it, i) => {
+      const r = session.results[i];
+      const cls = r ? gradeClass(r.grade) : i === session.idx && session.phase === 'q' ? 'now' : '';
+      const gap = session.blocks && i > 0 && it.block !== session.items[i - 1].block ? ' gap' : '';
+      return `<i class="${cls}${gap}"></i>`;
+    }).join('');
+  }
+
+  // workout break: score from the drill just finished, then pick the sound for the next one
+  function renderWorkoutBreak() {
+    const b = session.block;
+    const nb = session.blocks.length;
+    const bl = session.blocks[b];
+    const ex = exercises.byId[bl.exId];
+    let prev = '';
+    if (b > 0) {
+      const pex = exercises.byId[session.blocks[b - 1].exId];
+      const s = blockScore(b - 1);
+      const C = 2 * Math.PI * 52;
+      prev = `
+        <div class="card wo-score cat-${pex.cat}">
+          <div class="ring sm">
+            <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="ring-bg"/><circle cx="60" cy="60" r="52" class="ring-fg" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - s.p / 100)}"/></svg>
+            <div class="ring-label"><strong>${s.p}%</strong></div>
+          </div>
+          <div>
+            <div class="eyebrow">Drill ${b} of ${nb} done</div>
+            <h2>${esc(pex.name)} <span class="chip">${LEVELS[session.blocks[b - 1].level]}</span></h2>
+            <p class="muted"><strong>${s.good}</strong> correct · <strong>${s.close}</strong> close · <strong>+${s.xp}</strong> XP</p>
+          </div>
+        </div>`;
+    }
+    app.innerHTML = `
+      <section class="session wo-break cat-${ex.cat}">
+        <div class="sess-top">
+          <button class="back" data-action="quit">✕ End session</button>
+          <div class="sess-title"><span class="muted">Daily workout ·</span> Drill ${b + 1} of ${nb}</div>
+          <div class="sess-xp">${session.xp} XP</div>
+        </div>
+        <div class="segs">${segsHTML()}</div>
+        ${prev}
+        <div class="card stage wo-next">
+          <div class="eyebrow">${b === 0 ? 'First up' : 'Up next'} · ${catById[ex.cat].name}</div>
+          <div class="setup-head">
+            <div class="ex-icon lg">${icon(ex.icon)}</div>
+            <div>
+              <h1>${esc(ex.name)} <span class="chip">${LEVELS[bl.level]}</span></h1>
+              <p class="muted">${esc(ex.blurb)}</p>
+            </div>
+          </div>
+          ${ex.noSource ? '' : `<h3>Sound source</h3>${sourcePickerHTML(bl.source)}`}
+          <button class="btn primary lg" data-action="wo-go" ${fileLoading ? 'disabled' : ''}>Start ${esc(ex.name)} <kbd>↵</kbd></button>
+        </div>
+      </section>`;
+  }
+
   function renderSession() {
     if (view !== 'session' || !session) return;
+    if (session.phase === 'intro') return renderWorkoutBreak();
     const cur = session.cur;
     if (!cur) return;
     const { ex, item, q } = cur;
     const n = session.items.length;
-    const segs = session.items.map((_, i) => {
-      const r = session.results[i];
-      const cls = r ? gradeClass(r.grade) : i === session.idx ? 'now' : '';
-      return `<i class="${cls}"></i>`;
-    }).join('');
+    const segs = segsHTML();
 
     const transport = cur.loading
       ? `<div class="loading"><span class="spinner"></span>Preparing audio…</div>`
@@ -593,6 +724,22 @@
             </div>
           </div>
         </div>
+        ${s.blocks ? `<div class="card">
+          <h3>By drill</h3>
+          <div class="cat-bars">
+            ${s.blocks.map((bl, b) => {
+              const bex = exercises.byId[bl.exId];
+              const rs = s.results.filter((r) => r.block === b);
+              const bp = pct(rs.reduce((a, r) => a + r.grade, 0), rs.length);
+              const srcName = bex.noSource ? 'Test tones' : (sources.list.find((x) => x.id === bl.source) || {}).name || '';
+              return `<div class="cat-bar cat-${bex.cat}">
+                <span>${esc(bex.name)} <small class="muted">${LEVELS[bl.level]} · ${esc(srcName)}</small></span>
+                <div class="bar"><i style="width:${bp}%"></i></div>
+                <strong>${rs.length ? bp + '%' : '—'}</strong>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>` : ''}
         <div class="card">
           <h3>Review</h3>
           <table class="review">
@@ -675,17 +822,23 @@
   // ---------------------------------------------------------------- actions
   const actions = {
     'start-workout': () => {
-      const items = [];
-      dailyWorkout().forEach((it) => { for (let i = 0; i < 5; i++) items.push(it); });
-      startSession({ kind: 'workout', title: 'Daily workout', items, source: null });
+      const blocks = dailyWorkout().map((it) => {
+        const ex = exercises.byId[it.exId];
+        return { ...it, source: ex.noSource ? null : ex.defaultSource || 'mix' };
+      });
+      const items = blocks.flatMap((bl, b) => Array.from({ length: 5 }, () => ({ exId: bl.exId, level: bl.level, block: b })));
+      startSession({ kind: 'workout', title: 'Daily workout', items, blocks });
     },
+    'wo-go': () => startBlock(),
     'set-level': (el) => { setup.level = +el.dataset.i; renderSetup(setup.exId); },
     'set-source': (el) => {
-      if (el.dataset.id === 'user' && !sources.hasUser()) { document.getElementById('userfile').click(); return; }
-      setup.source = el.dataset.id;
-      renderSetup(setup.exId);
+      const t = sourceTarget();
+      if (!t || fileLoading) return;
+      if (el.dataset.id === 'user' && !sources.hasUser()) { pickFile(); return; }
+      t.source = el.dataset.id;
+      rerender();
     },
-    'pick-file': (el, e) => { e.preventDefault(); document.getElementById('userfile').click(); },
+    'pick-file': (el, e) => { e.preventDefault(); pickFile(); },
     'set-count': (el) => { setup.count = +el.dataset.n; renderSetup(setup.exId); },
     start: () => {
       const ex = exercises.byId[setup.exId];
@@ -728,6 +881,10 @@
     if (e.target.matches('input, textarea')) return;
     const cur = session.cur;
     const k = e.key.toLowerCase();
+    if (session.phase === 'intro') {
+      if (k === 'enter') { e.preventDefault(); startBlock(); }
+      return;
+    }
     if (k === ' ') { e.preventDefault(); audio.toggle(); }
     else if (k === 'j' || k === 'k' || k === 'l') audio.select('jkl'.indexOf(k));
     else if (k === 'enter') {

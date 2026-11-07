@@ -56,6 +56,10 @@ Each drill has **Easy, Medium, Hard and Pro** levels. Score 70% or better on a l
 to unlock the next one. After a miss, an **L** button lets you hear *your* pick next to the real answer.
 A ding plays for a good answer and a dull thud for a miss. Toggle these with the bell in the header.
 
+The **daily workout** runs four drills, one from each muscle group, with five questions each. Before
+each drill you choose its sound source, and after each drill you see your score for it. The results
+page breaks the workout down by drill.
+
 ## Sandbox
 
 A free-play tab with real-time processors modeled on classic Waves plugins:
@@ -80,7 +84,8 @@ compressor's 6 ms look-ahead, so level and timing never give the answer away.
 All practice audio is synthesized in the browser (no copyrighted audio is included):
 **Full mix**, **Drums**, **Bass & keys**, **Vocal** (with sibilance and a quiet hiss/hum floor for the
 de-esser and gate) and **Pink noise**. Choose **Your audio** to train on
-your own song. A 12-second excerpt from about 30% into the track is used.
+your own song (MP3, WAV, AIFF, M4A or FLAC). You can also drag a file onto the page. A 12-second
+excerpt from about 30% into the track is used.
 
 ## Keyboard
 

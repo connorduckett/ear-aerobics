@@ -213,6 +213,20 @@ main { max-width: 1120px; margin: 0 auto; padding: 28px 16px 80px; }
 .segs i.good { background: var(--good); }
 .segs i.close { background: var(--close); }
 .segs i.bad { background: var(--bad); }
+.segs i.gap { margin-left: 8px; }
+
+/* workout break between drills */
+.wo-score { display: flex; align-items: center; gap: 22px; margin-bottom: 16px; }
+.wo-score h2 { font-size: 22px; margin: 4px 0 6px; display: flex; align-items: center; gap: 10px; }
+.wo-score p { margin: 0; }
+.ring.sm { width: 96px; height: 96px; }
+.ring.sm .ring-label strong { font-size: 24px; }
+.wo-next .setup-head { margin: 10px 0 6px; }
+.wo-next h1 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.wo-next .btn.lg { margin-top: 24px; }
+.wo-next .btn kbd { margin-left: 6px; }
+.spinner.sm { display: inline-block; width: 12px; height: 12px; vertical-align: -1px; margin-right: 8px; }
+.cat-bar small { display: block; font-size: 12px; margin-top: 2px; }
 .stage { padding: 30px; text-align: center; border-top: 2px solid var(--cat); }
 .q-count { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 .prompt { font-size: clamp(22px, 3vw, 28px); margin: 8px 0 6px; }
@@ -322,7 +336,7 @@ tr:last-child td { border-bottom: 0; }
 .tile strong { display: block; font: 700 30px/1.2 var(--display); }
 .tile small { font-size: 16px; color: var(--muted); }
 .cat-bars { display: flex; flex-direction: column; gap: 14px; }
-.cat-bar { display: grid; grid-template-columns: 150px 1fr 50px; align-items: center; gap: 14px; }
+.cat-bar { display: grid; grid-template-columns: minmax(150px, auto) 1fr 50px; align-items: center; gap: 14px; }
 .cat-bar strong { text-align: right; font-family: var(--display); }
 .table-wrap { overflow-x: auto; }
 .drills td a { text-decoration: none; display: flex; align-items: center; gap: 8px; font-weight: 500; white-space: nowrap; }
@@ -516,4 +530,7 @@ tr:last-child td { border-bottom: 0; }
   .cat-bar .bar { grid-column: 1 / -1; grid-row: 2; }
   .history li { grid-template-columns: 1fr auto; }
   .keys { display: none; }
+  .wo-score { gap: 14px; }
+  .ring.sm { width: 72px; height: 72px; }
+  .ring.sm .ring-label strong { font-size: 18px; }
 }
