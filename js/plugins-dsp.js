@@ -11,6 +11,12 @@ window.EA = window.EA || {};
 function biquadCoefs(type, f, q, gainDb, sr) {
   f = Math.min(Math.max(f, 10), sr * 0.49);
   q = Math.max(q, 0.05);
+  if (type === 'hp1' || type === 'lp1') {
+    // first-order (6 dB/oct) sections, used to build the strip's 18 dB/oct high-pass
+    const K = Math.tan((Math.PI * f) / sr);
+    const a1 = (K - 1) / (K + 1);
+    return type === 'hp1' ? [1 / (1 + K), -1 / (1 + K), 0, a1, 0] : [K / (1 + K), K / (1 + K), 0, a1, 0];
+  }
   const A = Math.pow(10, gainDb / 40);
   const w0 = (2 * Math.PI * f) / sr;
   const cw = Math.cos(w0);
@@ -53,6 +59,30 @@ function staticGain(p, x) {
   if (2 * over < -knee) return 0;
   if (knee > 0 && 2 * Math.abs(over) <= knee) return (slope * Math.pow(over + knee / 2, 2)) / (2 * knee);
   return slope * over;
+}
+
+/**
+ * Filter + EQ coefficients for the channel strip (SSL EV2 style). Always returns
+ * three filter slots (18 dB/oct HPF = 1st + 2nd order, 12 dB/oct LPF) and four EQ
+ * slots, with unity coefficients for anything switched off.
+ */
+function stripCoefs(p, sr) {
+  const U = [1, 0, 0, 0, 0];
+  const on = (g) => p.eqIn && Math.abs(g) > 0.05;
+  const hpOn = p.hpf > 21, lpOn = p.lpf < 19500;
+  return {
+    filt: [
+      hpOn ? biquadCoefs('hp1', p.hpf, 0.707, 0, sr) : U,
+      hpOn ? biquadCoefs('lowcut', p.hpf, 1, 0, sr) : U,
+      lpOn ? biquadCoefs('highcut', p.lpf, 0.707, 0, sr) : U,
+    ],
+    eq: [
+      on(p.lfG) ? biquadCoefs(p.lfBell ? 'bell' : 'lowshelf', p.lfF, p.lfBell ? 0.8 : 0.71, p.lfG, sr) : U,
+      on(p.lmfG) ? biquadCoefs('bell', p.lmfF, p.lmfQ, p.lmfG, sr) : U,
+      on(p.hmfG) ? biquadCoefs('bell', p.hmfF, p.hmfQ, p.hmfG, sr) : U,
+      on(p.hfG) ? biquadCoefs(p.hfBell ? 'bell' : 'highshelf', p.hfF, p.hfBell ? 0.8 : 0.71, p.hfG, sr) : U,
+    ],
+  };
 }
 
 function eaWorkletBody() {
@@ -252,6 +282,122 @@ function eaWorkletBody() {
     }
   }
 
+  // ---------------- Channel strip (SSL EV2 Channel style) ------------------
+  // preamp gain + saturation + self-noise -> filters -> EQ <-> dynamics -> fader
+  const NOISE = Math.pow(10, -110 / 20) * Math.sqrt(12); // input-referred hiss, -110 dBFS RMS
+  const PROTECT_DB = -10; // monitor protection: hold the output's RMS at or below this
+
+  class Strip extends AudioWorkletProcessor {
+    constructor() {
+      super();
+      this.p = null;
+      this.F = [new BQ(), new BQ(), new BQ()];
+      this.E = [new BQ(), new BQ(), new BQ(), new BQ()];
+      this.key = '';
+      this.cDet = 0; this.cG = 0; this.gDet = 0; this.gG = 0; this.hold = 0;
+      this.ms = 0; this.prot = 0;
+      this.cnt = 0; this.inPk = 0; this.outPk = 0; this.cMin = 0; this.gMin = 0; this.pMin = 0;
+      this.port.onmessage = (e) => { this.p = e.data; };
+    }
+    coefs(p) {
+      const key = [p.hpf, p.lpf, p.eqIn, p.lfG, p.lfF, p.lfBell, p.lmfG, p.lmfF, p.lmfQ, p.hmfG, p.hmfF, p.hmfQ, p.hfG, p.hfF, p.hfBell].join('|');
+      if (key === this.key) return;
+      this.key = key;
+      const c = stripCoefs(p, sampleRate);
+      c.filt.forEach((k, i) => this.F[i].set(k));
+      c.eq.forEach((k, i) => this.E[i].set(k));
+    }
+    process(inputs, outputs) {
+      const io = chans(inputs, outputs);
+      const p = this.p;
+      if (io.silent || !p) { io.out.forEach((o) => o.fill(0)); return true; }
+      const { L, R, oL, oR, n } = io;
+      this.coefs(p);
+      const F = this.F, E = this.E;
+      const g = dbToLin(p.gain) * (p.polarity ? -1 : 1);
+      const fader = p.fader <= -59.9 ? 0 : dbToLin(p.fader);
+      const cP = { mode: 'comp', threshold: p.cThr, ratio: p.cRatio, knee: p.cRatio >= 19.5 ? 0 : 4 };
+      const gP = { mode: p.gMode === 'expand' ? 'expand' : 'gate', threshold: p.gThr, range: p.gRange, ratio: 2 };
+      const cAtk = coef(p.cFast ? 0.3 : 8), cRel = coef(p.cRel * 1000), cDetRel = coef(5);
+      const gAtk = coef(p.gFast ? 0.1 : 2), gRel = coef(p.gRel * 1000), gDetRel = coef(12);
+      const holdN = 0.02 * sampleRate;
+      const msC = coef(100), pAtk = coef(5), pRel = coef(400);
+      const dyn = !p.bypass && (p.compIn || p.gateIn);
+      if (!p.gateIn) this.gG = 0;
+      if (!p.compIn) this.cG = 0;
+
+      for (let i = 0; i < n; i++) {
+        // preamp: gain (with self-noise), then soft saturation when driven past full scale
+        let l = (L[i] + (Math.random() - 0.5) * NOISE) * g;
+        let r = (R[i] + (Math.random() - 0.5) * NOISE) * g;
+        const a = Math.max(Math.abs(l), Math.abs(r));
+        if (a > this.inPk) this.inPk = a;
+        l = Math.tanh(l);
+        r = Math.tanh(r);
+
+        if (!p.bypass) {
+          let fl = l, fr = r;
+          for (let k = 0; k < 3; k++) { fl = F[k].run(fl, 0); fr = F[k].run(fr, 1); }
+          if (!p.filtSc) { l = fl; r = fr; }
+          if (!p.dynPre) for (let k = 0; k < 4; k++) { l = E[k].run(l, 0); r = E[k].run(r, 1); }
+          if (dyn) {
+            const rect = p.filtSc ? Math.max(Math.abs(fl), Math.abs(fr)) : Math.max(Math.abs(l), Math.abs(r));
+            let gain = 0;
+            if (p.gateIn) {
+              this.gDet = rect > this.gDet ? rect : this.gDet * gDetRel;
+              let t = staticGain(gP, 20 * Math.log10(this.gDet + 1e-9));
+              if (t > -0.01) this.hold = holdN;
+              else if (this.hold > 0) { this.hold--; t = 0; }
+              const c = t > this.gG ? gAtk : gRel;
+              this.gG = c * this.gG + (1 - c) * t;
+              if (this.gG < this.gMin) this.gMin = this.gG;
+              gain += this.gG;
+            }
+            if (p.compIn) {
+              this.cDet = rect > this.cDet ? rect : this.cDet * cDetRel;
+              const t = staticGain(cP, 20 * Math.log10(this.cDet + 1e-9));
+              const c = t < this.cG ? cAtk : cRel;
+              this.cG = c * this.cG + (1 - c) * t;
+              if (this.cG < this.cMin) this.cMin = this.cG;
+              gain += this.cG;
+            }
+            const G = dbToLin(gain);
+            l *= G;
+            r *= G;
+          }
+          if (p.dynPre) for (let k = 0; k < 4; k++) { l = E[k].run(l, 0); r = E[k].run(r, 1); }
+        }
+
+        // fader, then the converter's hard ceiling
+        l *= fader;
+        r *= fader;
+        const ao = Math.max(Math.abs(l), Math.abs(r));
+        if (ao > this.outPk) this.outPk = ao;
+        l = l > 1 ? 1 : l < -1 ? -1 : l;
+        r = r > 1 ? 1 : r < -1 ? -1 : r;
+
+        // monitor protection so a cranked preamp can't blast the listener
+        this.ms = msC * this.ms + (1 - msC) * 0.5 * (l * l + r * r);
+        const over = 10 * Math.log10(this.ms + 1e-12) - PROTECT_DB;
+        const tgt = over > 0 ? -over : 0;
+        const pc = tgt < this.prot ? pAtk : pRel;
+        this.prot = pc * this.prot + (1 - pc) * tgt;
+        if (this.prot < this.pMin) this.pMin = this.prot;
+        if (this.prot < -0.01) { const pg = dbToLin(this.prot); l *= pg; r *= pg; }
+
+        oL[i] = l;
+        if (oR !== oL) oR[i] = r;
+      }
+      this.cnt += n;
+      if (this.cnt >= METER_EVERY) {
+        this.port.postMessage({ inPk: this.inPk, outPk: this.outPk, cgr: this.cMin, ggr: this.gMin, gOpen: !p.gateIn || this.gG > -3, prot: this.pMin });
+        this.cnt = 0; this.inPk = 0; this.outPk = 0; this.cMin = 0; this.gMin = 0; this.pMin = 0;
+      }
+      return true;
+    }
+  }
+
+  registerProcessor('ea-strip', Strip);
   registerProcessor('ea-eq', EQ);
   registerProcessor('ea-dyn', Dyn);
   registerProcessor('ea-deess', DeEss);
@@ -270,11 +416,11 @@ EA.pluginDsp = (() => {
   let url = null;
   function moduleUrl() {
     if (!url) {
-      const code = `${biquadCoefs.toString()}\n${staticGain.toString()}\n(${eaWorkletBody.toString()})();`;
+      const code = `${biquadCoefs.toString()}\n${staticGain.toString()}\n${stripCoefs.toString()}\n(${eaWorkletBody.toString()})();`;
       url = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
     }
     return url;
   }
 
-  return { biquadCoefs, staticGain, magDb, moduleUrl };
+  return { biquadCoefs, staticGain, stripCoefs, magDb, moduleUrl };
 })();

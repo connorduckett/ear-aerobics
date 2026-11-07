@@ -1,10 +1,10 @@
 /* Ear Aerobics — Sandbox: free play with real-time processors modeled on
- * classic Waves plugins (Q6, F6, C1 comp, C1 gate, DeEsser). */
+ * classic Waves plugins (Q6, F6, C1 comp, C1 gate, DeEsser, SSL EV2 Channel). */
 window.EA = window.EA || {};
 
 EA.sandbox = (() => {
   const { audio, sources, pluginDsp } = EA;
-  const { biquadCoefs, staticGain, magDb } = pluginDsp;
+  const { biquadCoefs, staticGain, stripCoefs, magDb } = pluginDsp;
 
   // ------------------------------------------------------------ formatting
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -64,6 +64,30 @@ EA.sandbox = (() => {
     P('freq', 'Freq', 2000, 16000, 6000, { scale: 'log', fmt: fmtHz, help: 'Where the de-esser listens. Sibilance usually sits at 5–8 kHz for most voices. Use Audition to hear exactly what it’s reacting to.' }),
     P('threshold', 'Threshold', -60, 0, -30, { fmt: fmtDb, help: 'How loud the "s" energy has to get before it’s reduced. Lower = more de-essing. Watch the reduction meter flick on each "s".' }),
     P('range', 'Range', 0, 24, 8, { fmt: (v) => '−' + v.toFixed(1) + ' dB', help: 'The most it will ever turn down. Too much makes the singer sound lispy, like they lost their teeth.' }),
+  ];
+
+  const fmtSec = (v) => (v < 1 ? Math.round(v * 1000) + ' ms' : v.toFixed(2) + ' s');
+  const STRIP_PARAMS = [
+    P('gain', 'Gain', 0, 60, 0, { fmt: (v) => '+' + v.toFixed(0) + ' dB', help: 'The mic preamp. A microphone puts out a tiny signal, so the preamp turns it up to a healthy working level. Set this first, before any EQ or compression: aim for peaks in the green zone (about −18 to −6 dBFS). Too low and you add hiss when you turn it up later. Too high and the preamp distorts and the converter clips.' }),
+    P('hpf', 'HPF', 20, 350, 20, { scale: 'log', fmt: (v) => (v < 21 ? 'Off' : fmtHz(v)), help: 'High-pass filter (18 dB/octave). Removes rumble, handling noise and mud below the frequency. Most sources except kick and bass get one. Raise it until the sound thins out, then back it off a little.' }),
+    P('lpf', 'LPF', 3000, 20000, 20000, { scale: 'log', fmt: (v) => (v > 19500 ? 'Off' : fmtHz(v)), help: 'Low-pass filter (12 dB/octave). Removes hiss and harsh top end above the frequency. Useful on bass, kick and guitar amps, or for a lo-fi effect.' }),
+    P('lfG', 'LF Gain', -15, 15, 0, { fmt: fmtDb, bipolar: true, help: 'Low frequency band. As a shelf it lifts or lowers everything below the frequency (weight, boom). Switch it to Bell to boost or cut just around the frequency.' }),
+    P('lfF', 'LF Freq', 30, 450, 100, { scale: 'log', fmt: fmtHz, help: 'Where the low band works. 50–100 Hz is weight and thump; 200–400 Hz is where mud lives.' }),
+    P('lmfG', 'LMF Gain', -15, 15, 0, { fmt: fmtDb, bipolar: true, help: 'Low-mid bell. Cut 250–500 Hz to clear mud and boxiness; boost around 200 Hz for body.' }),
+    P('lmfF', 'LMF Freq', 200, 2500, 600, { scale: 'log', fmt: fmtHz, help: 'Center frequency of the low-mid band (200 Hz to 2.5 kHz).' }),
+    P('lmfQ', 'LMF Q', 0.5, 4, 1, { scale: 'log', fmt: fmtQ, help: 'Width of the low-mid band. Higher Q is narrower and more surgical.' }),
+    P('hmfG', 'HMF Gain', -15, 15, 0, { fmt: fmtDb, bipolar: true, help: 'High-mid bell. 2–5 kHz is presence and bite: boost for clarity, cut for harshness.' }),
+    P('hmfF', 'HMF Freq', 600, 7000, 2500, { scale: 'log', fmt: fmtHz, help: 'Center frequency of the high-mid band (600 Hz to 7 kHz).' }),
+    P('hmfQ', 'HMF Q', 0.5, 4, 1, { scale: 'log', fmt: fmtQ, help: 'Width of the high-mid band.' }),
+    P('hfG', 'HF Gain', -15, 15, 0, { fmt: fmtDb, bipolar: true, help: 'High frequency band. As a shelf, adds or removes air and sparkle above the frequency.' }),
+    P('hfF', 'HF Freq', 1500, 16000, 8000, { scale: 'log', fmt: fmtHz, help: 'Where the high band works. 8–12 kHz is air; 5–7 kHz is sibilance and edge.' }),
+    P('cRatio', 'Ratio', 1, 20, 4, { scale: 'log', fmt: (v) => (v >= 19.5 ? '∞:1 (limit)' : fmtRatio(v)), help: 'How hard the compressor turns down signal above the threshold. Turned all the way up it becomes a limiter.' }),
+    P('cThr', 'Threshold', -40, 0, -10, { fmt: fmtDb, help: 'The level where compression starts. Because it comes after the preamp, your Gain setting changes how hard the compressor works. That’s why you set gain first.' }),
+    P('cRel', 'Release', 0.1, 4, 0.3, { scale: 'log', fmt: fmtSec, help: 'How fast the compressor lets go after the signal drops. Short release is lively and can pump; long release is smooth.' }),
+    P('gThr', 'Threshold', -80, 0, -40, { fmt: fmtDb, help: 'Below this level the gate closes (or the expander turns down). Set it above the hiss and bleed but below the quietest part you want to keep.' }),
+    P('gRange', 'Range', 0, 40, 20, { fmt: (v) => '−' + v.toFixed(0) + ' dB', help: 'How far the gate turns the signal down when closed. 40 dB is nearly silent; 10–15 dB is a gentle cleanup.' }),
+    P('gRel', 'Release', 0.1, 4, 0.25, { scale: 'log', fmt: fmtSec, help: 'How fast the gate closes once the signal drops below the threshold.' }),
+    P('fader', 'Fader', -60, 12, 0, { fmt: (v) => (v <= -59.9 ? '−∞' : fmtDb(v)), bipolar: true, help: 'The channel fader: the final level sent to the mix. Use it (not the preamp gain) to balance this channel against others, and to make up level lost to compression.' }),
   ];
 
   // ------------------------------------------------------------ plugins
@@ -156,6 +180,40 @@ EA.sandbox = (() => {
         'Lisp (overdone)': { freq: 4500, threshold: -55, range: 24, mode: 'split', filter: 'hp', audition: 'off' },
       },
     },
+    {
+      id: 'strip1', name: 'Strip-1', model: 'SSL EV2 Channel', kind: 'strip', proc: 'ea-strip', source: 'vocal',
+      tagline: 'Channel strip', params: STRIP_PARAMS,
+      toggles: [
+        { key: 'polarity', label: 'Polarity', def: 'norm', options: [['norm', 'Normal'], ['inv', 'Ø Invert']], help: 'Flips the waveform upside down. On its own you won’t hear a difference. It matters when two mics hear the same source (like top and bottom snare), where flipping one can fix a thin, hollow sound.' },
+        { key: 'filtSc', label: 'Filters to', def: 'audio', options: [['audio', 'Audio'], ['sc', 'Dyn sidechain']], help: 'Normally the filters cut the audio itself. Send them to the dynamics sidechain instead and they only change what the compressor and gate listen to. For example, a high-pass in the sidechain stops the kick from pumping the compressor.' },
+        { key: 'eqIn', label: 'EQ', def: 'on', options: [['on', 'In'], ['off', 'Out']], help: 'Switches the whole EQ section in or out, so you can compare your EQ against none.' },
+        { key: 'lfBell', label: 'LF', def: 'shelf', options: [['shelf', 'Shelf'], ['bell', 'Bell']], help: 'Shelf affects everything below the frequency. Bell only affects a range around it.' },
+        { key: 'hfBell', label: 'HF', def: 'shelf', options: [['shelf', 'Shelf'], ['bell', 'Bell']], help: 'Shelf affects everything above the frequency. Bell only affects a range around it.' },
+        { key: 'dynPre', label: 'Order', def: 'post', options: [['post', 'EQ → Dyn'], ['pre', 'Dyn → EQ']], help: 'Where the dynamics sit. EQ first means EQ boosts make the compressor work harder. Dynamics first means the compressor reacts to the raw sound and your EQ isn’t squashed.' },
+        { key: 'compIn', label: 'Compressor', def: 'off', options: [['off', 'Out'], ['on', 'In']], help: 'Switches the compressor in or out.' },
+        { key: 'cFast', label: 'Attack', def: 'auto', options: [['auto', 'Auto'], ['fast', 'Fast']], help: 'Auto attack lets the front of each note through for punch. Fast attack clamps down almost instantly to catch peaks.' },
+        { key: 'gateIn', label: 'Gate', def: 'off', options: [['off', 'Out'], ['on', 'In']], help: 'Switches the gate / expander in or out.' },
+        { key: 'gMode', label: 'Mode', def: 'gate', options: [['gate', 'Gate'], ['expand', 'Expander']], help: 'A gate shuts the sound off below the threshold. An expander turns it down gradually, which sounds more natural.' },
+        { key: 'gFast', label: 'Attack', def: 'auto', options: [['auto', 'Auto'], ['fast', 'Fast']], help: 'How fast the gate opens. Fast catches sharp drum hits but can click on softer sounds.' },
+      ],
+      about: 'A channel strip is everything one input passes through on a mixing console, in order: the mic preamp, filters, EQ, dynamics and the fader. This one starts the way a real input does: the microphone arrives at a very low level, and it’s your job to set the gain first, then shape the sound. It’s modeled on the SSL 4000 E-series console channel.',
+      tryThis: [
+        'Press play. The IN meter barely moves because the mic is at mic level. Turn up Gain until the peaks land in the green zone (−18 to −6 dBFS). That’s gain staging.',
+        'Keep turning Gain past 0 dBFS. Hear the preamp distort and the CLIP light come on. Back it off. Notice the hiss also rises as you add gain.',
+        'Click New input for a different singer with a different level, and set the gain again using the meter and your ears.',
+        'Raise the HPF until the voice gets thin, then back it off. Then cut a little LMF around 300 Hz and add HF shelf for air.',
+        'Put the compressor In at 4:1 and lower the threshold until you see 3–6 dB of gain reduction. Then use the Fader to match the level with B (bypass).',
+        'Switch Order to Dyn → EQ, boost the LF, and hear how the compressor stops reacting to the boost.',
+      ],
+      presets: {
+        'Clean vocal': { hpf: 90, lmfG: -3, lmfF: 320, lmfQ: 1.2, hmfG: 2, hmfF: 3200, hfG: 3, hfF: 10000, compIn: 'on', cRatio: 3, cThr: -22, cRel: 0.25, fader: 3 },
+        'Radio voice': { hpf: 300, lpf: 4500, lmfG: 0, hmfG: 7, hmfF: 1600, hmfQ: 0.8, compIn: 'on', cRatio: 10, cThr: -26, cRel: 0.15, cFast: 'fast', fader: 6 },
+        'Kick drum': { hpf: 30, lfBell: 'bell', lfG: 5, lfF: 60, lmfG: -6, lmfF: 380, lmfQ: 1.6, hmfG: 4, hmfF: 4000, hmfQ: 1.5, compIn: 'on', cRatio: 4, cThr: -20, cRel: 0.15, gateIn: 'on', gThr: -36, gRange: 30, gFast: 'fast', gRel: 0.15, fader: 2 },
+        'Snare drum': { hpf: 80, lfBell: 'bell', lfG: 3, lfF: 200, lmfG: -3, lmfF: 600, hmfG: 4, hmfF: 5000, hfG: 2, compIn: 'on', cRatio: 4, cThr: -18, cRel: 0.12, gateIn: 'on', gThr: -30, gRange: 25, gFast: 'fast', gRel: 0.12, fader: 2 },
+        'Acoustic guitar': { hpf: 100, lmfG: -4, lmfF: 250, lmfQ: 1, hmfG: 0, hfG: 3, hfF: 12000, compIn: 'on', cRatio: 2.5, cThr: -20, cRel: 0.4, fader: 2 },
+        'Bass DI': { hpf: 35, lpf: 6000, lfG: 3, lfF: 80, lmfG: -3, lmfF: 450, hmfG: 2, hmfF: 1200, compIn: 'on', cRatio: 4, cThr: -24, cRel: 0.3, fader: 3 },
+      },
+    },
   ];
   const PL = Object.fromEntries(PLUGINS.map((p) => [p.id, p]));
 
@@ -172,6 +230,8 @@ EA.sandbox = (() => {
     const st = defaultState(pl);
     if (pl.kind === 'eq') st.bands = st.bands.map((b, i) => ({ ...b, ...(preset[i] || {}) }));
     else Object.assign(st, preset);
+    // a strip preset shapes the sound but keeps your gain staging
+    if (pl.kind === 'strip') st.gain = state[pl.id].gain;
     state[pl.id] = st;
   }
 
@@ -180,12 +240,22 @@ EA.sandbox = (() => {
   let src = null, playing = false, inGain = null, analyser = null, outGain = null, moduleReady = null;
   const nodes = {};
   let meter = {}, disp = { in: -90, out: -90, gr: 0 }, raf = 0, specBuf = null, drag = null, cvDrag = null;
+  // channel strip meter state: peak hold for the gain-staging readout, clip LED timers, ballistics
+  const stage = { hold: -90, clipIn: 0, clipOut: 0, in: -90, out: -90, cgr: 0, ggr: 0, prot: 0 };
 
   function message(id) {
     const pl = PL[id], st = state[id];
     if (pl.kind === 'eq') return { bypass, out: st.out, bands: st.bands.map((b) => ({ ...b, dyn: pl.dynamic })) };
     if (pl.id === 'comp1') return { bypass, mode: 'comp', ...st, scLp: 20000 };
     if (pl.id === 'gate1') return { bypass, ...st, mode: st.type === 'expand' ? 'expand' : 'gate', makeup: 0, knee: 0 };
+    if (pl.kind === 'strip') {
+      return {
+        bypass, ...st,
+        polarity: st.polarity === 'inv', filtSc: st.filtSc === 'sc', eqIn: st.eqIn === 'on',
+        lfBell: st.lfBell === 'bell', hfBell: st.hfBell === 'bell', dynPre: st.dynPre === 'pre',
+        compIn: st.compIn === 'on', cFast: st.cFast === 'fast', gateIn: st.gateIn === 'on', gFast: st.gFast === 'fast',
+      };
+    }
     return { bypass, freq: st.freq, threshold: st.threshold, range: st.range, split: st.mode === 'split', bp: st.filter === 'bp', audition: st.audition === 'on' };
   }
   const send = () => { if (nodes[current]) nodes[current].port.postMessage(message(current)); };
@@ -222,9 +292,23 @@ EA.sandbox = (() => {
     inGain.disconnect();
     Object.values(nodes).forEach((n) => n.disconnect());
     const n = getNode(current);
+    // the channel strip receives the source at "mic level"; everything else at line level
+    inGain.gain.value = PL[current].kind === 'strip' ? Math.pow(10, micDb / 20) : 1;
     inGain.connect(n);
     n.connect(analyser);
     send();
+  }
+
+  // a new performer at the mic: somewhere between a quiet talker and a loud singer
+  const randomMic = () => Math.round(-52 + Math.random() * 22);
+  let micDb = randomMic();
+  function newMic() {
+    let d;
+    do d = randomMic(); while (Math.abs(d - micDb) < 6);
+    micDb = d;
+    stage.hold = -90;
+    if (inGain && PL[current].kind === 'strip') inGain.gain.setTargetAtTime(Math.pow(10, micDb / 20), audio.ctx.currentTime, 0.02);
+    showHelp('New input', 'A different performer at a different level. Watch the IN meter and set the Gain again.');
   }
 
   async function startSource() {
@@ -417,6 +501,8 @@ EA.sandbox = (() => {
         </div>
         ${togglesHTML(pl)}
         <div class="knobs">${pl.params.map((p) => knobHTML(p.key, pl.id === 'gate1' && p.key === 'ratio' && state.gate1.type !== 'expand' ? 'disabled' : '')).join('')}</div>`;
+    } else if (pl.kind === 'strip') {
+      body = stripHTML(pl);
     } else {
       body = `<canvas class="graph eq-graph" data-cv></canvas>
         <p class="graph-hint">The shaded area is what the de-esser listens to · drag on the graph to move the frequency</p>
@@ -433,6 +519,90 @@ EA.sandbox = (() => {
       </div>
       ${body}`;
     if (pl.kind === 'eq') { renderBandTabs(); renderBandUi(); }
+  }
+
+  // ------------------------------------------------------------ channel strip layout
+  const IN_MIN = -60, IN_MAX = 6;
+  const hmPct = (d, min = IN_MIN, max = IN_MAX) => (clamp((d - min) / (max - min), 0, 1) * 100).toFixed(2) + '%';
+
+  function stripHTML(pl) {
+    const st = state[pl.id];
+    const tgl = (key, cls = '') => {
+      const t = pl.toggles.find((x) => x.key === key);
+      return `<div class="tgl ${cls}"><span class="sb-label">${esc(t.label)}</span>${segHTML(key, t.options, st[key], t.help)}</div>`;
+    };
+    const k = (key, cls = '') => knobHTML(key, cls);
+    const scale = (marks, min, max) => `<div class="hm-scale">${marks.map((d) => `<span style="left:${hmPct(d, min, max)}">${d > 0 ? '+' + d : d}</span>`).join('')}</div>`;
+    const eqDim = st.eqIn === 'on' ? '' : 'dim';
+    return `<div class="strip">
+      <section class="st-sec st-input">
+        <div class="st-head"><h4><span class="st-num">1</span>Input · Preamp</h4><span class="muted">The mic arrives at a very low level. Set the gain first.</span></div>
+        <div class="st-in">
+          ${k('gain', 'big')}
+          <div class="st-in-main">
+            <div class="sb-label">Input level (after the preamp)</div>
+            <div class="hmeter" data-hm="in">
+              <div class="hm-zone" style="left:${hmPct(-18)};right:calc(100% - ${hmPct(-6)})"></div>
+              <div class="hm-zero" style="left:${hmPct(0)}"></div>
+              <i></i><b class="hm-clip" data-clip="in">CLIP</b>
+            </div>
+            ${scale([-60, -40, -18, -6, 0], IN_MIN, IN_MAX)}
+            <div class="st-stage" data-stage>Press play, then turn up the Gain.</div>
+          </div>
+          <div class="st-in-side">
+            ${tgl('polarity')}
+            <button class="btn sm" data-sb="newmic" data-help="Swap in a different performer at a different mic level, so you can practice setting gain from scratch.">New input</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="st-sec">
+        <div class="st-head"><h4><span class="st-num">2</span>Filters</h4>${tgl('filtSc', 'inline')}</div>
+        <div class="st-row">${k('hpf')}${k('lpf')}</div>
+      </section>
+
+      <section class="st-sec">
+        <div class="st-head"><h4><span class="st-num">3</span>EQ</h4>${tgl('eqIn', 'inline nolabel')}</div>
+        <canvas class="graph st-graph" data-cv></canvas>
+        <div class="st-eq">
+          <div class="st-band"><span class="st-bn">LF</span><div class="st-kn ${eqDim}">${k('lfG')}${k('lfF')}</div>${tgl('lfBell', 'mini')}</div>
+          <div class="st-band"><span class="st-bn">LMF</span><div class="st-kn ${eqDim}">${k('lmfG')}${k('lmfF')}${k('lmfQ')}</div></div>
+          <div class="st-band"><span class="st-bn">HMF</span><div class="st-kn ${eqDim}">${k('hmfG')}${k('hmfF')}${k('hmfQ')}</div></div>
+          <div class="st-band"><span class="st-bn">HF</span><div class="st-kn ${eqDim}">${k('hfG')}${k('hfF')}</div>${tgl('hfBell', 'mini')}</div>
+        </div>
+      </section>
+
+      <section class="st-sec">
+        <div class="st-head"><h4><span class="st-num">4</span>Dynamics</h4>${tgl('dynPre', 'inline')}</div>
+        <div class="st-dyn">
+          <div class="st-unit">
+            <div class="st-uh"><span class="st-bn">Compressor</span>${tgl('compIn', 'inline')}</div>
+            <div class="st-kn ${st.compIn === 'on' ? '' : 'dim'}">${k('cRatio')}${k('cThr')}${k('cRel')}</div>
+            ${tgl('cFast', 'mini')}
+            <div class="st-gr"><span>GR</span><div class="hmeter gr" data-hm="cgr"><i></i></div><strong data-grr="cgr">0.0 dB</strong></div>
+          </div>
+          <div class="st-unit">
+            <div class="st-uh"><span class="st-bn">Gate / Expander</span>${tgl('gateIn', 'inline')}</div>
+            <div class="st-kn ${st.gateIn === 'on' ? '' : 'dim'}">${k('gThr')}${k('gRange')}${k('gRel')}</div>
+            <div class="st-tgls">${tgl('gMode', 'mini')}${tgl('gFast', 'mini')}</div>
+            <div class="st-gr"><span>GR</span><div class="hmeter gr" data-hm="ggr"><i></i></div><strong data-grr="ggr">0.0 dB</strong><div class="gate-led" data-gate>OPEN</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="st-sec st-out">
+        <div class="st-head"><h4><span class="st-num">5</span>Output</h4></div>
+        <div class="st-in">
+          ${k('fader', 'big')}
+          <div class="st-in-main">
+            <div class="sb-label">Output level</div>
+            <div class="hmeter" data-hm="out"><div class="hm-zero" style="left:${hmPct(0)}"></div><i></i><b class="hm-clip" data-clip="out">CLIP</b></div>
+            ${scale([-60, -40, -18, -6, 0], IN_MIN, IN_MAX)}
+            <div class="st-stage small" data-prot></div>
+          </div>
+        </div>
+      </section>
+    </div>`;
   }
 
   function metersHTML(full) {
@@ -481,6 +651,7 @@ EA.sandbox = (() => {
       if (a === 'play') togglePlay();
       else if (a === 'bypass') toggleBypass();
       else if (a === 'reset') { state[current] = defaultState(PL[current]); renderPlugin(); send(); }
+      else if (a === 'newmic') newMic();
       return;
     }
     const srcBtn = t.closest('[data-src]');
@@ -566,7 +737,8 @@ EA.sandbox = (() => {
     if (k) { const p = spec(k.dataset.knob); if (p) showHelp(p.label, p.help); return; }
     const h = e.target.closest('[data-help]');
     if (h && h.dataset.help) {
-      const label = h.closest('.tgl') ? h.closest('.tgl').querySelector('.sb-label').textContent : h.classList.contains('types') ? 'Band type' : 'Band power';
+      const label = h.closest('.tgl') ? h.closest('.tgl').querySelector('.sb-label').textContent
+        : h.dataset.sb === 'newmic' ? 'New input' : h.classList.contains('types') ? 'Band type' : 'Band power';
       showHelp(label, h.dataset.help);
     }
   }
@@ -923,6 +1095,106 @@ EA.sandbox = (() => {
     }
   }
 
+  /** Strip graph: combined filter + EQ response over the live output spectrum. */
+  function drawStrip(cv) {
+    const f = fit(cv);
+    if (!f) return;
+    const { g, W, H } = f;
+    const sr = audio.ctx ? audio.ctx.sampleRate : 48000;
+    drawFreqGrid(g, W, H, true);
+    drawSpectrum(g, W, H);
+    const p = message(current);
+    const c = stripCoefs(p, sr);
+    const filtInPath = !p.filtSc;
+    const all = [...(filtInPath ? c.filt : []), ...c.eq];
+    const pts = [];
+    for (let x = 0; x <= W; x += 2) {
+      const fr = fOfX(x, W);
+      let d = 0;
+      all.forEach((k) => { d += magDb(k, fr, sr); });
+      pts.push([x, yOfDb(clamp(d, -DBR - 6, DBR + 6), H)]);
+    }
+    // filters routed to the sidechain: show them as a dashed "what the dynamics hear" curve
+    if (!filtInPath && (p.hpf > 21 || p.lpf < 19500)) {
+      g.beginPath();
+      for (let x = 0; x <= W; x += 2) {
+        const fr = fOfX(x, W);
+        let d = 0;
+        c.filt.forEach((k) => { d += magDb(k, fr, sr); });
+        const y = yOfDb(clamp(d, -DBR - 6, DBR + 6), H);
+        x ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.strokeStyle = 'rgba(255,181,71,0.7)';
+      g.lineWidth = 1.5;
+      g.setLineDash([5, 4]);
+      g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = 'rgba(255,181,71,0.85)';
+      g.font = '600 11px Inter, system-ui, sans-serif';
+      g.fillText('filters → dynamics sidechain', 32, 16);
+    }
+    g.beginPath();
+    pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.strokeStyle = bypass ? 'rgba(235,238,245,0.35)' : css('--accent') || '#c8ff3e';
+    g.lineWidth = 2.5;
+    g.stroke();
+  }
+
+  function updateStripMeters() {
+    const fall = 1.2, now = performance.now();
+    const inDb = lin2db(meter.inPk || 0), outDb = lin2db(meter.outPk || 0);
+    stage.in = Math.max(inDb, stage.in - fall);
+    stage.out = Math.max(outDb, stage.out - fall);
+    stage.hold = Math.max(inDb, stage.hold - 0.08);
+    if (playing && (meter.inPk || 0) > 1) stage.clipIn = now;
+    if (playing && (meter.outPk || 0) > 1) stage.clipOut = now;
+    stage.cgr = Math.min(playing && !bypass ? meter.cgr || 0 : 0, stage.cgr + 0.6);
+    stage.ggr = Math.min(playing && !bypass ? meter.ggr || 0 : 0, stage.ggr + 0.6);
+    stage.prot = playing ? meter.prot || 0 : 0;
+
+    const q = (s) => root.querySelector(s);
+    const setW = (k, w) => { const el = q(`[data-hm="${k}"] i`); if (el) el.style.width = w; };
+    setW('in', hmPct(stage.in));
+    setW('out', hmPct(stage.out));
+    ['in', 'out'].forEach((k) => {
+      const el = q(`[data-hm="${k}"]`);
+      if (el) { el.classList.toggle('hot', stage[k] > -6 && stage[k] <= 0); el.classList.toggle('over', stage[k] > 0); }
+    });
+    setW('cgr', (clamp(-stage.cgr / 20, 0, 1) * 100).toFixed(1) + '%');
+    setW('ggr', (clamp(-stage.ggr / 40, 0, 1) * 100).toFixed(1) + '%');
+    const ci = q('[data-clip="in"]'), co = q('[data-clip="out"]');
+    if (ci) ci.classList.toggle('on', now - stage.clipIn < 1500);
+    if (co) co.classList.toggle('on', now - stage.clipOut < 1500);
+    ['cgr', 'ggr'].forEach((k) => {
+      const t = q(`[data-grr="${k}"]`);
+      if (t) t.textContent = `${stage[k] < -0.05 ? '−' : ''}${Math.abs(stage[k]).toFixed(1)} dB`;
+    });
+    const led = q('[data-gate]');
+    if (led) {
+      const st = state[current];
+      const open = !playing || bypass || st.gateIn !== 'on' || meter.gOpen !== false;
+      led.classList.toggle('open', open);
+      led.textContent = open ? 'OPEN' : 'CLOSED';
+    }
+
+    // gain-staging coach
+    const s = q('[data-stage]');
+    if (s) {
+      let cls = '', msg;
+      const pk = stage.hold;
+      if (!playing) msg = 'Press play, then turn up the Gain.';
+      else if (now - stage.clipIn < 1500) { cls = 'bad'; msg = 'Clipping! The preamp is distorting. Turn the Gain down.'; }
+      else if (pk < -40) { cls = 'bad'; msg = `Way too quiet (peaks ${pk.toFixed(0)} dBFS). This is mic level. Turn the Gain up.`; }
+      else if (pk < -18) { cls = 'close'; msg = `Still low (peaks ${pk.toFixed(0)} dBFS). A bit more Gain.`; }
+      else if (pk <= -6) { cls = 'good'; msg = `Good level (peaks ${pk.toFixed(0)} dBFS). Healthy signal with headroom to spare.`; }
+      else { cls = 'close'; msg = `Hot (peaks ${pk.toFixed(0)} dBFS). Very little headroom. Back the Gain off a touch.`; }
+      s.className = 'st-stage ' + cls;
+      s.textContent = msg;
+    }
+    const pr = q('[data-prot]');
+    if (pr) pr.textContent = stage.prot < -1 ? `Monitor protection is turning the output down ${(-stage.prot).toFixed(0)} dB to protect your ears.` : '';
+  }
+
   const lin2db = (v) => (v > 0 ? 20 * Math.log10(v) : -90);
 
   function updateMeters() {
@@ -948,15 +1220,17 @@ EA.sandbox = (() => {
   function frame() {
     if (!mounted) return;
     raf = requestAnimationFrame(frame);
-    if (!playing) { meter = PL[current].kind === 'eq' ? {} : { ...meter, inPk: 0, outPk: 0, gr: 0 }; }
-    const cv = root.querySelector('[data-cv]');
     const kind = PL[current].kind;
+    if (!playing) { meter = kind === 'eq' || kind === 'strip' ? {} : { ...meter, inPk: 0, outPk: 0, gr: 0 }; }
+    const cv = root.querySelector('[data-cv]');
     if (cv) {
       if (kind === 'eq') drawEQ(cv);
       else if (kind === 'dyn') drawTransfer(cv);
+      else if (kind === 'strip') drawStrip(cv);
       else drawDeEss(cv);
     }
-    if (kind !== 'eq') updateMeters();
+    if (kind === 'strip') updateStripMeters();
+    else if (kind !== 'eq') updateMeters();
   }
 
   return { mount, unmount, PLUGINS };

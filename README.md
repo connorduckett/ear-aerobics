@@ -71,6 +71,15 @@ A free-play tab with real-time processors modeled on classic Waves plugins:
 | Comp-1 | C1 Compressor | Threshold, ratio, attack, release, knee, makeup, sidechain HPF, with a transfer curve and GR meter |
 | Gate-1 | C1 Gate | Gate or expander with range, hold and key filters |
 | De-Esser | DeEsser | Split or wideband, high-pass or band-pass sidechain, and audition of what it's listening to |
+| Strip-1 | SSL EV2 Channel | A full console channel strip: mic preamp gain, HPF/LPF, 4-band EQ, compressor, gate/expander and fader |
+
+**Strip-1** starts the way a real input does. The source arrives at mic level (around −40 dBFS),
+so you set the preamp **Gain** first. A coach under the input meter tells you when the level is too
+quiet, in the sweet spot (peaks between −18 and −6 dBFS), hot, or clipping. Push the gain too far and
+the preamp distorts. Turn it up and the hiss rises with it. **New input** swaps in a performer at a
+different level so you can practice again. The filters can be sent to the dynamics sidechain, and the
+dynamics can sit before or after the EQ. A monitor protection limiter keeps a cranked preamp from
+blasting your ears.
 
 Each plugin has presets, a "Try this" list, and help text for every control. Press `B` to bypass
 and compare. The Sandbox uses AudioWorklet. If your browser blocks it when the app is opened as a
