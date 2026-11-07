@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ear Aerobics</title>
+  <meta name="description" content="Ear training for audio engineers: EQ, level, panning and compression drills.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23c8ff3e'/%3E%3Cpath d='M6 16h4l2-6 3.5 12 3-9 2 5 1.5-2H26' stroke='%230b0d12' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="var(--accent)"/><path d="M6 16h4l2-6 3.5 12 3-9 2 5 1.5-2H26" stroke="var(--accent-ink)" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Ear<b>Aerobics</b></span>
+    </a>
+    <nav>
+      <a href="#/" data-nav="home">Gym</a>
+      <a href="#/sandbox" data-nav="sandbox">Sandbox</a>
+      <a href="#/progress" data-nav="progress">Progress</a>
+    </nav>
+    <button class="sfx-toggle" id="sfxToggle" aria-label="Toggle answer sounds">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path class="slash" d="M3 3l18 18"/></svg>
+    </button>
+    <label class="vol" title="Output volume">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></svg>
+      <input type="range" id="volume" min="0" max="1" step="0.01" aria-label="Volume">
+    </label>
+  </header>
+  <main id="app"></main>
+
+  <script src="js/dsp.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/sources.js"></script>
+  <script src="js/exercises.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/plugins-dsp.js"></script>
+  <script src="js/sandbox.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
