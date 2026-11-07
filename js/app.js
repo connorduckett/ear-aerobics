@@ -234,11 +234,11 @@
             <h3>How it works</h3>
             <ul class="how">
               ${ex.mode === 'which'
-                ? '<li>Press <kbd>Space</kbd> to play. Switch between <kbd>A</kbd> and <kbd>B</kbd> as often as you like.</li><li>Pick the one you think is compressed.</li>'
-                : `<li>Press <kbd>Space</kbd> to play. Toggle <kbd>A</kbd> (${esc(ex.abLabels[0])}) and <kbd>B</kbd> (${esc(ex.abLabels[1])}) to compare.</li>${ex.continuous
+                ? '<li>Press <kbd>Space</kbd> to play. Switch between <kbd>J</kbd> and <kbd>K</kbd> as often as you like.</li><li>Pick the one you think is compressed.</li>'
+                : `<li>Press <kbd>Space</kbd> to play. Toggle <kbd>J</kbd> (${esc(ex.abLabels[0])}) and <kbd>K</kbd> (${esc(ex.abLabels[1])}) to compare.</li>${ex.continuous
                   ? '<li>Click or drag on the strip to place your answer, fine-tune with <kbd>←</kbd> <kbd>→</kbd>, then press <kbd>↵</kbd> to lock it in.</li><li>Points scale with how close you get. Dead on earns full credit.</li>'
                   : ex.layout === 'two' ? '<li>Pick which of the two amounts is the real change.</li>' : '<li>Choose your answer. Adjacent answers earn half credit.</li>'}`}
-              ${ex.mode !== 'which' ? '<li>Missed it? A <kbd>C</kbd> button appears so you can hear <em>your</em> pick next to the real answer.</li>' : ''}
+              ${ex.mode !== 'which' ? '<li>Missed it? An <kbd>L</kbd> button appears so you can hear <em>your</em> pick next to the real answer.</li>' : ''}
             </ul>
           </div>
         </div>
@@ -376,7 +376,7 @@
         ? `<strong>${esc(right)}</strong> was the compressed one.`
         : `It was <strong>${esc(right)}</strong>, you picked ${esc(ex.longLabel(choice, q))}.`;
     }
-    const compare = ex.mode !== 'which' && grade < 1 && choice !== q.answer ?`<div class="compare-hint">Flip between <kbd>B</kbd> and <kbd>C</kbd> to hear the difference.</div>` : '';
+    const compare = ex.mode !== 'which' && grade < 1 && choice !== q.answer ?`<div class="compare-hint">Flip between <kbd>K</kbd> and <kbd>L</kbd> to hear the difference.</div>` : '';
     const xp = Math.round(10 * XP_MULT[cur.item.level] * grade);
     return `<div class="feedback ${cls}">
       <div><div class="fb-title">${title}${xp ? ` <span class="fb-xp">+${xp} XP</span>` : ''}</div><div class="fb-body">${body}</div>${compare}</div>
@@ -535,7 +535,7 @@
         : `<div class="transport">
             <button class="play ${audio.playing ? 'on' : ''}" data-action="play" aria-label="${audio.playing ? 'Stop' : 'Play'}">${audio.playing ? STOP : PLAY}</button>
             <div class="ab">
-              ${cur.labels.map((l, i) => `<button class="ab-btn ${i === audio.active ? 'active' : ''} ${i === 2 ? 'pick' : ''}" data-action="ab" data-i="${i}"><kbd>${'ABC'[i]}</kbd><span>${esc(l)}</span>${audio.playing && i === audio.active ? '<span class="eq-anim"><i></i><i></i><i></i></span>' : ''}</button>`).join('')}
+              ${cur.labels.map((l, i) => `<button class="ab-btn ${i === audio.active ? 'active' : ''} ${i === 2 ? 'pick' : ''}" data-action="ab" data-i="${i}"><kbd>${'JKL'[i]}</kbd><span>${esc(l)}</span>${audio.playing && i === audio.active ? '<span class="eq-anim"><i></i><i></i><i></i></span>' : ''}</button>`).join('')}
             </div>
           </div>`;
 
@@ -555,7 +555,7 @@
           ${answersHTML(cur)}
           ${cur.answered ? feedbackHTML(cur) : ''}
         </div>
-        <p class="keys"><kbd>Space</kbd> play/stop · <kbd>A</kbd> <kbd>B</kbd> <kbd>C</kbd> switch · ${ex.continuous ? '<kbd>←</kbd> <kbd>→</kbd> fine-tune (<kbd>Shift</kbd> for big steps)' : '<kbd>1</kbd>–<kbd>9</kbd> answer'} · <kbd>↵</kbd> ${ex.continuous ? 'lock in / next' : 'next'}</p>
+        <p class="keys"><kbd>Space</kbd> play/stop · <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> switch · ${ex.continuous ? '<kbd>←</kbd> <kbd>→</kbd> fine-tune (<kbd>Shift</kbd> for big steps)' : '<kbd>1</kbd>–<kbd>9</kbd> answer'} · <kbd>↵</kbd> ${ex.continuous ? 'lock in / next' : 'next'}</p>
       </section>`;
     if (ex.continuous) bindSlider();
   }
@@ -729,7 +729,7 @@
     const cur = session.cur;
     const k = e.key.toLowerCase();
     if (k === ' ') { e.preventDefault(); audio.toggle(); }
-    else if (k === 'a' || k === 'b' || k === 'c') audio.select('abc'.indexOf(k));
+    else if (k === 'j' || k === 'k' || k === 'l') audio.select('jkl'.indexOf(k));
     else if (k === 'enter') {
       e.preventDefault();
       if (cur && cur.ex.continuous && !cur.answered) { if (cur.pending != null && !cur.loading) answer(cur.pending); }

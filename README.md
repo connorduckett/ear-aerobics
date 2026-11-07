@@ -53,7 +53,7 @@ keys to fine-tune, and press Enter to lock it in. Points scale with how close yo
 tightens the scoring window (for example, full credit within 1/3 octave on Easy and 1/12 octave on Pro).
 
 Each drill has **Easy, Medium, Hard and Pro** levels. Score 70% or better on a level (5+ questions)
-to unlock the next one. After a miss, a **C** button lets you hear *your* pick next to the real answer.
+to unlock the next one. After a miss, an **L** button lets you hear *your* pick next to the real answer.
 A ding plays for a good answer and a dull thud for a miss. Toggle these with the bell in the header.
 
 ## Sandbox
@@ -84,7 +84,7 @@ your own song. A 12-second excerpt from about 30% into the track is used.
 
 ## Keyboard
 
-`Space` play/stop · `A` `B` `C` switch versions · `1`–`9` answer · `Enter` next question
+`Space` play/stop · `J` `K` `L` switch versions · `1`–`9` answer · `Enter` next question
 
 ## Project layout
 

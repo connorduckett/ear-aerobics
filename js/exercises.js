@@ -223,7 +223,7 @@ EA.exercises = (() => {
     // ======================= LEVEL =======================
     {
       id: 'gain', name: 'Gain Detective', cat: 'level', icon: 'gain', mode: 'ab', partial: false, layout: 'two',
-      blurb: 'B has been turned up or down. Two choices. Which one is the real change?',
+      blurb: 'The Changed version has been turned up or down. Two choices. Which one is the real change?',
       defaultSource: 'mix',
       abLabels: ['Reference', 'Changed'],
       tips: [
@@ -249,7 +249,7 @@ EA.exercises = (() => {
       },
       label: (v) => fmt.db(v),
       longLabel: (v) => fmt.db(v),
-      prompt: (q) => `Was B changed by ${fmt.db(q.options[0])} or ${fmt.db(q.options[1])}?`,
+      prompt: (q) => `Was the level changed by ${fmt.db(q.options[0])} or ${fmt.db(q.options[1])}?`,
       render: (src, q, v) => dsp.render(src, gain(v)),
     },
 
