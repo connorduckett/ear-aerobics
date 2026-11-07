@@ -7,11 +7,12 @@ progress tracking, unlockable difficulty levels and a daily workout.
 
 ### Option 1: Use it in your browser (easiest, nothing to download)
 
-Open **WEBSITE_LINK** in Chrome, Edge, Safari or Firefox. Works on computers, tablets and phones.
+Open **https://connorduckett.github.io/ear-aerobics/** in Chrome, Edge, Safari or Firefox. Works on
+computers, tablets and phones.
 
 ### Option 2: Download it to use offline
 
-1. Go to the **[latest release](RELEASES_LINK)** and download **`EarAerobics.zip`**.
+1. Go to the **[latest release](https://github.com/connorduckett/ear-aerobics/releases/latest)** and download **`EarAerobics.zip`**.
 2. Unzip it (double-click the zip file).
 3. Open the unzipped folder and start the app:
    - **Mac:** double-click **`Start Ear Aerobics (Mac).command`**.
