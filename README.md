@@ -40,9 +40,9 @@ Sandbox's real-time audio for files opened that way.
 
 | Muscle group | Drill | What you identify |
 |---|---|---|
-| EQ & Frequency | Peak Finder | Exact frequency of a bell boost, anywhere from 30 Hz to 12 kHz |
-| | Dip Finder | Exact frequency of a bell cut, 30 Hz to 12 kHz |
-| | Filter Sweep | Exact cutoff of a 24 dB/oct high-pass or low-pass filter |
+| EQ & Frequency | Peak Finder | Exact frequency of a bell boost, anywhere from 80 Hz to 12 kHz |
+| | Dip Finder | Exact frequency of a bell cut, 80 Hz to 12 kHz |
+| | Filter Sweep | Exact cutoff of a 24 dB/oct high-pass or low-pass filter, 80 Hz to 12 kHz |
 | Level | Gain Detective | Which of two amounts B was turned up or down by |
 | Stereo Image | Pan Position | Exact pan position of a mono source, L100 to R100 |
 | Dynamics | Spot the Squeeze | Which of A or B is compressed |

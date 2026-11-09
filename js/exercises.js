@@ -40,9 +40,9 @@ EA.exercises = (() => {
 
   // ---- continuous answer axes ---------------------------------------------
   const FREQ_AXIS = {
-    kind: 'log', min: 30, max: 12000,
-    ticks: [30, 60, 125, 250, 500, 1000, 2000, 4000, 8000, 12000],
-    minor: [40, 50, 70, 80, 90, 100, 150, 200, 300, 400, 600, 700, 800, 900, 1500, 3000, 5000, 6000, 7000, 10000],
+    kind: 'log', min: 80, max: 12000,
+    ticks: [80, 125, 250, 500, 1000, 2000, 4000, 8000, 12000],
+    minor: [90, 100, 150, 200, 300, 400, 600, 700, 800, 900, 1500, 3000, 5000, 6000, 7000, 10000],
     snap: niceHz, fmt: fmt.hzLong, short: fmt.hz,
     dist: (a, b) => Math.abs(Math.log2(a / b)),
     distText: (d) => (d < 0.005 ? 'dead on' : `${d.toFixed(2)} octaves off`),
@@ -159,12 +159,12 @@ EA.exercises = (() => {
     {
       ...freqBase,
       id: 'peak', name: 'Peak Finder', icon: 'peak',
-      blurb: 'A bell boost is hiding somewhere between 30 Hz and 12 kHz. Pinpoint it. The closer you get, the more points.',
+      blurb: 'A bell boost is hiding somewhere between 80 Hz and 12 kHz. Pinpoint it. The closer you get, the more points.',
       defaultSource: 'pink',
       abLabels: ['Flat', "EQ'd"],
       tips: [
         'Flip between Flat and EQ’d. Listen for which part of the spectrum suddenly "sticks out".',
-        'Lows (30–125 Hz) feel like weight and rumble; 250–500 Hz sounds boxy or muddy.',
+        'Lows (80–150 Hz) feel like weight and thump; 250–500 Hz sounds boxy or muddy.',
         '1–2 kHz is nasal and honky; 3–5 kHz is presence and bite; 8–12 kHz is air and sizzle.',
         'Get in the right octave first, then refine. Arrow keys nudge your marker.',
       ],
@@ -174,7 +174,7 @@ EA.exercises = (() => {
         { desc: `+6 dB · ${FREQ_TOL[2].txt}`, gain: 6, q: 2, tol: FREQ_TOL[2] },
         { desc: `+6 dB narrow · ${FREQ_TOL[3].txt}`, gain: 6, q: 3, tol: FREQ_TOL[3] },
       ],
-      question: (L) => ({ answer: niceHz(randLog(35, 11000)), gain: L.gain, q: L.q, tol: L.tol }),
+      question: (L) => ({ answer: niceHz(randLog(90, 11000)), gain: L.gain, q: L.q, tol: L.tol }),
       prompt: (q) => `Where is the +${q.gain} dB boost?`,
       render: (src, q, v) => dsp.render(src, peaking(v, q.gain, q.q)),
     },
@@ -195,7 +195,7 @@ EA.exercises = (() => {
         { desc: `−9 dB · ${FREQ_TOL[2].txt}`, gain: -9, q: 2, tol: FREQ_TOL[2] },
         { desc: `−9 dB narrow · ${FREQ_TOL[3].txt}`, gain: -9, q: 3, tol: FREQ_TOL[3] },
       ],
-      question: (L) => ({ answer: niceHz(randLog(35, 11000)), gain: L.gain, q: L.q, tol: L.tol }),
+      question: (L) => ({ answer: niceHz(randLog(90, 11000)), gain: L.gain, q: L.q, tol: L.tol }),
       prompt: (q) => `Where is the ${Math.abs(q.gain)} dB cut?`,
       render: (src, q, v) => dsp.render(src, peaking(v, q.gain, q.q)),
     },
@@ -208,12 +208,12 @@ EA.exercises = (() => {
       tips: [
         'High-pass: listen for where the bottom end stops. Is the kick gone? The bass? The snare body?',
         'Low-pass: listen for where the top stops. Are the hats dull? Is the snare muffled?',
-        'Reference points: kick fundamental ~50 Hz, bass notes 40–200 Hz, hats live above 6 kHz.',
+        'Reference points: kick and bass weight sit around 80–150 Hz, snare body near 200 Hz, hats live above 6 kHz.',
       ],
       levels: FREQ_TOL.map((tol, i) => ({ desc: `${['Wide', 'Moderate', 'Tight', 'Pro'][i]} scoring · ${tol.txt}`, tol })),
       question: (L) => {
         const type = Math.random() < 0.5 ? 'highpass' : 'lowpass';
-        const answer = niceHz(type === 'highpass' ? randLog(40, 2500) : randLog(800, 11000));
+        const answer = niceHz(type === 'highpass' ? randLog(90, 2500) : randLog(800, 11000));
         return { answer, type, tol: L.tol };
       },
       prompt: (q) => `A ${q.type === 'highpass' ? 'high-pass' : 'low-pass'} filter was applied. Where is the cutoff?`,
